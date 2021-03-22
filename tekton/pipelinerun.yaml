@@ -1,0 +1,58 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: build-spark-with-tekton
+spec:
+  pipelineRef:
+    name: clone-build-push 
+  workspaces:
+  - name: shared-data
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  params:
+    - name: url
+      value: "https://github.com/psschwei/containerized-app.git"
+    - name: IMAGE
+      value: "psschwei/containerized-app:latest"
+    - name: DOCKERFILE
+      value: "s2i.Dockerfile"
+    - name: CONTEXT
+      value: "."
+    - name: action
+      value: "create"
+    - name: output
+      value: |
+        - name: job-name
+          valueFrom: '{.metadata.name}'
+        - name: job-namespace
+          valueFrom: '{.metadata.namespace}'
+    - name: success-condition
+      value: "status.applicationState.state = COMPLETED"
+    - name: failure-condition
+      value: "status.applicationState.state = FAILED"
+    - name: manifest
+      value: |
+        apiVersion: sparkoperator.k8s.io/v1beta2
+        kind: SparkApplication
+        metadata:
+          name: spark-pi
+          labels:
+            job: spark-test
+        spec:
+          sparkVersion: 2.4.5
+          type: Scala
+          mode: cluster
+          image: psschwei/containerized-app:latest
+          imagePullPolicy: Always
+          mainClass: SparkPi
+          mainApplicationFile: local:///opt/spark/target/scala-2.11/kubernetes-assembly-1.0.0.jar
+          driver:
+            memory: 1g
+          executor:
+            instances: 2
+            memory: 2g

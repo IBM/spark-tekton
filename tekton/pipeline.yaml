@@ -1,0 +1,67 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: clone-build-push
+spec:
+  workspaces:
+  - name: shared-data
+  params:
+  - name: url
+    description: git url to clone (required)
+  - name: IMAGE
+    description: the name (reference) of the iamge to build (required)
+  - name: DOCKERFILE
+    description: the path to the Dockerfile to execute (default ./Dockerfile)
+  - name: CONTEXT
+    description: the build context used by Kaniko (default ./)
+  - name: action
+    description: the action to perform to the resource (required)
+  - name: manifest
+    description: the content of the resource to deploy (required)
+  - name: success-condition
+    description: condition that indicates deploy was successful (optional)
+  - name: failure-condition
+    description: condition that indicates deploy failed(optional)
+  - name: output
+    description: values from completed resource values to extract and write to /tekton/results/$(name)
+  tasks:
+  - name: clone
+    taskRef:
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: shared-data
+    params:
+      - name: url
+        value: "$(params.url)"
+  - name: build-push
+    taskRef:
+      name: kaniko
+    runAfter:
+      - clone
+    params:
+    - name: IMAGE
+      value: "$(params.IMAGE)"
+    - name: DOCKERFILE
+      value: "$(params.DOCKERFILE)"
+    - name: CONTEXT
+      value: "$(params.CONTEXT)"
+    workspaces:
+    - name: source
+      workspace: shared-data
+  - name: deploy
+    taskRef: 
+      name: kubectl-deploy-pod
+    runAfter:
+      - build-push
+    params:
+    - name: action
+      value: "$(params.action)"
+    - name: manifest
+      value: "$(params.manifest)"
+    - name: success-condition
+      value: "$(params.success-condition)"
+    - name: failure-condition
+      value: "$(params.failure-condition)"
+    - name: output
+      value: "$(params.output)"
